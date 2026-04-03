@@ -1,0 +1,8 @@
+[package]
+name = "algorand-falcon-lsig"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+curve25519-dalek = "4"
+sha2 = "0.10"
