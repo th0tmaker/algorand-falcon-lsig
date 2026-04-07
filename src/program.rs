@@ -1,106 +1,140 @@
 // src/program.rs
 
 use curve25519_dalek::edwards::CompressedEdwardsY;
-use sha2::{Digest, Sha512_256};
 
-use crate::{error::Error, lsig::LogicSig};
+use crate::address::Address;
+use crate::error::Error;
 
-/// Size of a Falcon det1024 public key in bytes.
-pub const FALCON_DET1024_PUBKEY_SIZE: usize = 1793;
+/// Size of a Falcon public key in bytes.
+pub const PUBKEY_SIZE: usize = 1793;
 
-/// Size of a `FalconVerifyProgram` in bytes.
+/// Size of the FalconVerifier AVM bytecode in bytes.
+pub const BYTECODE_SIZE: usize = 1805;
+
+/// A FalconVerifier LogicSig.
 ///
-/// 1 (version) + 4 (bytecblock) + 2 (txn TxID) + 1 (arg 0) + 3 (pushbytes prefix) + 1793 (pubkey) + 1 (falcon_verify)
-pub const FALCON_VERIFY_PROGRAM_SIZE: usize = 1805;
+/// Field names mirror the Algorand wire format:
+/// 
+/// * `l` (the AVM bytecode) maps to `lsig.l`
+/// *  `arg` (the Falcon compressed signature) maps to `lsig.arg[0]`
+/// 
+/// The delegation fields (`sig`, `msig`, `lmsig`)
+/// are not relevant here — a FalconVerifier account is its own authority.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LogicSig {
+    /// Takes `AVM bytecode` representing a program's logic.
+    /// Maps to `lsig.l` in the Algorand wire format.
+    l: [u8; BYTECODE_SIZE],
+    /// Takes a Falcon compressed signature over the transaction ID as bytes.
+    /// Maps to `lsig.arg[0]` in the Algorand wire format.
+    arg: Box<[u8]>,
+}
 
-/// A Falcon det1024 LogicSig program with the public key embedded.
+impl LogicSig {
+    /// Returns `self` AVM bytecode. Maps to `lsig.l` in the Algorand wire format.
+    pub fn l(&self) -> &[u8; BYTECODE_SIZE] {
+        &self.l
+    }
+
+    /// Returns `self` compressed Falcon signature. Maps to `lsig.arg[0]` in the Algorand wire format.
+    pub fn arg(&self) -> &[u8] {
+        &self.arg
+    }
+}
+
+/// A FalconVerifier program.
 ///
-/// The program is always exactly 1805 bytes:
+/// The AVM bytecode format:
 ///
 /// ```text
-/// offset  bytes        instruction
-///      0  0c           #pragma version 12
-///    1-4  26 01 01 XX  bytecblock XX   (XX = counter byte, offset 4)
-///    5-6  31 17        txn TxID
-///      7  2d           arg 0
-///   8-10  80 81 0e     pushbytes (1793-byte length prefix)
-///  11-1803 [pubkey]   Falcon-1024 public key
-///   1804  85           falcon_verify
+/// offset    bytes        instruction
+///      0    0c           #pragma version 12
+///    1-4    26 01 01 XX  bytecblock XX (XX = counter byte, offset 4)
+///    5-6    31 17        txn TxID
+///      7    2d           arg 0
+///   8-10    80 81 0e     pushbytes (1793-byte length prefix)
+///  11-1803  [pubkey]     Falcon-1024 pubkey
+///   1804    85           falcon_verify
 /// ```
 ///
 /// The counter at offset 4 is incremented until the derived address is not a valid
 /// Ed25519 curve point, ensuring no Ed25519 private key can authorize transactions
 /// from this account.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct FalconVerifyProgram([u8; FALCON_VERIFY_PROGRAM_SIZE]);
+pub struct Program([u8; BYTECODE_SIZE]);
 
-impl FalconVerifyProgram {
-    /// Derive a `FalconVerifyProgram` from a Falcon det1024 public key.
+impl Program {
+    /// Compiles FalconVerifier AVM bytecode with an embedded Falcon public key.
     ///
-    /// Tries counter values 0–255 and returns the first program whose derived
-    /// address is not a valid Ed25519 curve point. Returns `Err(Error::NoValidCounter)`
-    /// if all 256 counters fail, which is vanishingly unlikely in practice.
-    pub fn derive(pubkey: &[u8; FALCON_DET1024_PUBKEY_SIZE]) -> Result<Self, Error> {
-        let mut program = [0u8; FALCON_VERIFY_PROGRAM_SIZE];
-        program[0] = 0x0c;
-        program[1..5].copy_from_slice(&[0x26, 0x01, 0x01, 0x00]);
-        program[5..7].copy_from_slice(&[0x31, 0x17]);
-        program[7] = 0x2d;
-        program[8..11].copy_from_slice(&[0x80, 0x81, 0x0e]);
-        program[11..1804].copy_from_slice(pubkey);
-        program[1804] = 0x85;
+    /// Assembles the bytecode, then iterates counters 0–255 until the derived
+    /// address is **not** a valid Ed25519 curve point.
+    /// Returns `Err(Error::NoSafeAddress)` if all 256 attempts fail.
+    pub fn compile(pubkey: &[u8; PUBKEY_SIZE]) -> Result<Self, Error> {
+        // Create 1805-byte mutable buffer and assemble the program
+        let mut p = [0u8; BYTECODE_SIZE];
+        p[0] = 0x0c;
+        p[1..5].copy_from_slice(&[0x26, 0x01, 0x01, 0x00]);
+        p[5..7].copy_from_slice(&[0x31, 0x17]);
+        p[7] = 0x2d;
+        p[8..11].copy_from_slice(&[0x80, 0x81, 0x0e]);
+        p[11..1804].copy_from_slice(pubkey);
+        p[1804] = 0x85;
 
-        for counter in 0u8..=255 {
-            program[4] = counter;
-            let addr = address_of(&program);
-            if CompressedEdwardsY(addr).decompress().is_none() {
-                return Ok(Self(program));
+        // Loop through u8 range
+        for counter in 0..=255 {
+            // Add counter value to program at index 4
+            p[4] = counter;
+            
+            // Derive the program address from bytecode
+            let addr = Address::from_bytecode(&p);
+
+            // Return Ok if address bytes are not a valid ed25519 curve point
+            if CompressedEdwardsY(*addr.as_bytes()).decompress().is_none() {
+                return Ok(Self(p));
             }
         }
-        Err(Error::NoValidCounter)
+        // Throw error if no safe address
+        Err(Error::NoSafeAddress)
     }
 
-    /// Returns the raw AVM program bytes.
-    pub fn as_bytes(&self) -> &[u8; FALCON_VERIFY_PROGRAM_SIZE] {
+    /// Returns the underlying AVM bytecode.
+    pub fn as_bytes(&self) -> &[u8; BYTECODE_SIZE] {
         &self.0
     }
 
-    /// Derives the on-chain address: `SHA512/256("Program" || program)`.
-    ///
-    /// Fund this address before submitting any transactions from it.
-    pub fn address(&self) -> [u8; 32] {
-        address_of(&self.0)
+    /// Returns the 32-byte [`Address`] derived from the underlying AVM bytecode.
+    pub fn address(&self) -> Address {
+        Address::from_bytecode(&self.0)
     }
 
-    /// Attach a Falcon signature to produce a `LogicSig` ready for submission.
+    /// Bundles the AVM bytecode with a Falcon signature into a [`LogicSig`] 
     ///
-    /// `sig` should be the compressed Falcon signature over the transaction ID
-    /// (`SHA512/256("TX" || msgpack(txn))`). The caller is responsible for
-    /// computing the transaction ID and signing it with the corresponding private key.
+    /// `sig` - is not part of the bytecode itself but
+    /// represents a runtime argument passed alongside the program.
+    /// It must be a Falcon signature in compressed format 
+    /// produced over the transaction ID as the data.
+    /// 
+    /// The [`LogicSig`] must be added into the `lsig` field of an Algorand signed 
+    /// transaction in order to make this program the signing authority and sender.
+    /// After that, anyone can attempt to submit the signed transaction to the network,
+    /// which will be succeed if the program evalutes to `true`
+    /// (finishes with a single non-zero `u64` value on the stack).
     pub fn to_lsig(&self, sig: &[u8]) -> LogicSig {
         LogicSig {
-            logic: self.0,
-            sig: sig.into(),
+            l: self.0,
+            arg: sig.into(),
         }
     }
-}
-
-/// Computes `SHA512/256("Program" || program)` — the Algorand contract account address.
-fn address_of(program: &[u8]) -> [u8; 32] {
-    let mut h = Sha512_256::new();
-    h.update(b"Program");
-    h.update(program);
-    h.finalize().into()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    const ZERO_PUBKEY: &[u8; FALCON_DET1024_PUBKEY_SIZE] = &[0u8; FALCON_DET1024_PUBKEY_SIZE];
+    const ZERO_PUBKEY: &[u8; PUBKEY_SIZE] = &[0u8; PUBKEY_SIZE];
 
-    fn build_program(pubkey: &[u8; FALCON_DET1024_PUBKEY_SIZE], counter: u8) -> [u8; FALCON_VERIFY_PROGRAM_SIZE] {
-        let mut p = [0u8; FALCON_VERIFY_PROGRAM_SIZE];
+    fn build_bytecode(pubkey: &[u8; PUBKEY_SIZE], counter: u8) -> [u8; BYTECODE_SIZE] {
+        let mut p = [0u8; BYTECODE_SIZE];
         p[0] = 0x0c;
         p[1..5].copy_from_slice(&[0x26, 0x01, 0x01, counter]);
         p[5..7].copy_from_slice(&[0x31, 0x17]);
@@ -112,59 +146,54 @@ mod tests {
     }
 
     #[test]
-    fn program_length() {
-        let program = build_program(ZERO_PUBKEY, 0);
-        assert_eq!(program.len(), FALCON_VERIFY_PROGRAM_SIZE);
+    fn bytecode_length() {
+        assert_eq!(build_bytecode(ZERO_PUBKEY, 0).len(), BYTECODE_SIZE);
     }
 
     #[test]
-    fn program_structure() {
-        let program = build_program(ZERO_PUBKEY, 0x42);
-        assert_eq!(program[0], 0x0c);           // version 12
-        assert_eq!(program[4], 0x42);           // counter
-        assert_eq!(&program[5..7], &[0x31, 0x17]); // txn TxID
-        assert_eq!(program[7], 0x2d);           // arg 0
-        assert_eq!(&program[8..11], &[0x80, 0x81, 0x0e]); // pushbytes prefix
-        assert_eq!(&program[11..1804], ZERO_PUBKEY.as_slice()); // pubkey
-        assert_eq!(program[1804], 0x85);        // falcon_verify
+    fn bytecode_structure() {
+        let bytecode = build_bytecode(ZERO_PUBKEY, 0x42);
+        assert_eq!(bytecode[0], 0x0c);                              // version 12
+        assert_eq!(bytecode[4], 0x42);                              // counter
+        assert_eq!(&bytecode[5..7], &[0x31, 0x17]);                // txn TxID
+        assert_eq!(bytecode[7], 0x2d);                              // arg 0
+        assert_eq!(&bytecode[8..11], &[0x80, 0x81, 0x0e]);         // pushbytes prefix
+        assert_eq!(&bytecode[11..1804], ZERO_PUBKEY.as_slice());    // pubkey
+        assert_eq!(bytecode[1804], 0x85);                           // falcon_verify
     }
 
     #[test]
     fn counter_affects_only_offset_4() {
-        let p0 = build_program(ZERO_PUBKEY, 0x00);
-        let p1 = build_program(ZERO_PUBKEY, 0x01);
-        assert_ne!(p0, p1);
-        assert_eq!(p0[4], 0x00);
-        assert_eq!(p1[4], 0x01);
-        // Everything else is identical
-        assert_eq!(&p0[..4], &p1[..4]);
-        assert_eq!(&p0[5..], &p1[5..]);
+        let b0 = build_bytecode(ZERO_PUBKEY, 0x00);
+        let b1 = build_bytecode(ZERO_PUBKEY, 0x01);
+        assert_ne!(b0, b1);
+        assert_eq!(b0[4], 0x00);
+        assert_eq!(b1[4], 0x01);
+        assert_eq!(&b0[..4], &b1[..4]);
+        assert_eq!(&b0[5..], &b1[5..]);
     }
 
     #[test]
-    fn address_is_32_bytes_and_deterministic() {
-        let program = build_program(ZERO_PUBKEY, 0);
-        let a1 = address_of(&program);
-        let a2 = address_of(&program);
-        assert_eq!(a1.len(), 32);
-        assert_eq!(a1, a2);
+    fn address_is_deterministic() {
+        let bytecode = build_bytecode(ZERO_PUBKEY, 0);
+        assert_eq!(Address::from_bytecode(&bytecode), Address::from_bytecode(&bytecode));
     }
 
     #[test]
     fn different_pubkeys_give_different_addresses() {
-        let mut other_pubkey = [0u8; FALCON_DET1024_PUBKEY_SIZE];
+        let mut other_pubkey = [0u8; PUBKEY_SIZE];
         other_pubkey[0] = 0x01;
-        let a1 = address_of(&build_program(ZERO_PUBKEY, 0));
-        let a2 = address_of(&build_program(&other_pubkey, 0));
-        assert_ne!(a1, a2);
+        let addr1 = Address::from_bytecode(&build_bytecode(ZERO_PUBKEY, 0));
+        let addr2 = Address::from_bytecode(&build_bytecode(&other_pubkey, 0));
+        assert_ne!(addr1, addr2);
     }
 
     #[test]
     fn to_lsig_attaches_sig() {
-        let lsig = FalconVerifyProgram(build_program(ZERO_PUBKEY, 0));
+        let program = Program(build_bytecode(ZERO_PUBKEY, 0));
         let fake_sig = vec![0xAB, 0xCD, 0xEF];
-        let auth = lsig.to_lsig(&fake_sig);
-        assert_eq!(&auth.logic, lsig.as_bytes());
-        assert_eq!(&*auth.sig, fake_sig.as_slice());
+        let lsig = program.to_lsig(&fake_sig);
+        assert_eq!(lsig.l(), program.as_bytes());
+        assert_eq!(lsig.arg(), fake_sig.as_slice());
     }
 }
