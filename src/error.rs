@@ -2,19 +2,23 @@
 
 #[derive(Debug)]
 pub enum Error {
-    /// All 256 counter values were exhausted without finding a safe address that is not a
-    /// valid Ed25519 curve point. Try using a different Falcon key.
-    NoSafeAddress,
+    /// Counter exhausted with no off-curve address found. Try a different Falcon key.
+    CounterExhausted,
+    /// Address is not valid base32 or decodes to the wrong length.
+    BadAddressEncoding,
+    /// Address checksum mismatch.
+    BadAddressChecksum,
+    /// Address is a valid Ed25519 public key and may have a corresponding private key.
+    Ed25519Address,
 }
 
 impl std::fmt::Display for Error {
-    /// Formats self variants into a human-readable strings
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::NoSafeAddress => f.write_str(
-                "all counter values were exhausted without finding a safe address \
-                that is not a valid Ed25519 curve point. try using a different Falcon key.",
-            ),
+            Self::CounterExhausted => f.write_str("counter exhausted with no off-curve address found; try a different Falcon key."),
+            Self::BadAddressEncoding => f.write_str("address is not valid base32 or decodes to the wrong length."),
+            Self::BadAddressChecksum => f.write_str("address checksum mismatch."),
+            Self::Ed25519Address => f.write_str("address must not be a standard Ed25519 public key that has corresponding private key."),
         }
     }
 }
