@@ -304,13 +304,13 @@ mod tests {
     #[test]
     fn bytecode_structure() {
         let bytecode = build_bytecode(ZERO_PUBKEY, 0x42);
-        assert_eq!(bytecode[0], 0x0c);                              // version 12
-        assert_eq!(bytecode[4], 0x42);                              // counter
-        assert_eq!(&bytecode[5..7], &[0x31, 0x17]);                // txn TxID
-        assert_eq!(bytecode[7], 0x2d);                              // arg 0
-        assert_eq!(&bytecode[8..11], &[0x80, 0x81, 0x0e]);         // pushbytes prefix
-        assert_eq!(&bytecode[11..1804], ZERO_PUBKEY.as_slice());    // pubkey
-        assert_eq!(bytecode[1804], 0x85);                           // falcon_verify
+        assert_eq!(bytecode[0], 0x0c);  // version 12
+        assert_eq!(bytecode[4], 0x42);  // counter
+        assert_eq!(&bytecode[5..7], &[0x31, 0x17]);  // txn TxID
+        assert_eq!(bytecode[7], 0x2d);  // arg 0
+        assert_eq!(&bytecode[8..11], &[0x80, 0x81, 0x0e]);  // pushbytes prefix
+        assert_eq!(&bytecode[11..1804], ZERO_PUBKEY.as_slice());  // pubkey
+        assert_eq!(bytecode[1804], 0x85);  // falcon_verify
     }
 
     #[test]
