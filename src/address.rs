@@ -55,7 +55,7 @@ impl FromStr for Address {
         let bytes: [u8; 32] = decoded[..32].try_into().unwrap();
 
         // Hash the decoded bytes with SHA512/256 to get the checksum
-        let expected = Sha512_256::digest(&bytes);
+        let expected = Sha512_256::digest(bytes);
 
         // Throw error if checksum invalid
         if decoded[32..] != expected[28..] {
@@ -77,7 +77,7 @@ impl fmt::Display for Address {
     /// e.g. `VCMJKWOY5P5POAA53TPWFF6ROMZEGVBKOR3DFR6GH6XKRMCMLE5ZWRFNN`
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         // Hash bytes of self to derive checksum
-        let checksum = Sha512_256::digest(&self.0);
+        let checksum = Sha512_256::digest(self.0);
         
         // Create 36-byte mutable buffer (32-byte self + 4-byte checksum)
         let mut buf = [0u8; 36];
