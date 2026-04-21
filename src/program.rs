@@ -14,7 +14,7 @@ use crate::{
 /// *  `falcon_sig` (the Falcon compressed signature) maps to `lsig.arg[0]`
 /// 
 /// The delegation fields (`sig`, `msig`, `lmsig`)
-/// are not relevant here — a [`FalconTxnSignerProgram`] account is its own authority.
+/// are not relevant here — a [FalconTxnSignerProgram] account is its own authority.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct FalconTxnSignerLogicSig {
     /// The `AVM bytecode` representing the `FalconTxnSigner` program's logic.
@@ -99,21 +99,21 @@ impl FalconTxnSigner {
         &self.0
     }
 
-    /// Returns the 32-byte [`Address`] derived from the underlying AVM bytecode.
+    /// Returns the 32-byte [Address] derived from the underlying AVM bytecode.
     pub fn address(&self) -> Address {
         Address::from_bytecode(&self.0)
     }
 
     /// Bundles the underlying AVM bytecode as `l` and
     /// the Falcon compressed signature as `arg[0]`
-    /// into a [`FalconTxnSignerLogicSig`]
+    /// into a [FalconTxnSignerLogicSig]
     ///
     /// `falcon_sig` is not part of the bytecode itself but
     /// represents a runtime argument passed alongside the program.
     /// It must be a valid Falcon signature in compressed format 
     /// produced over the transaction ID as the data.
     /// 
-    /// The [`FalconTxnSignerLogicSig`] must be added into the `lsig` field of an 
+    /// The [FalconTxnSignerLogicSig] must be added into the `lsig` field of an 
     /// Algorand signed transaction in order to make this program the signing authority 
     /// and sender. After that, anyone can attempt to submit the signed transaction
     /// to the network, which will succeed if the program evalutes to `true`
@@ -135,7 +135,7 @@ impl FalconTxnSigner {
 /// *  `ed25519_sig` (the Ed25519 signature) maps to `lsig.arg[1]`
 /// 
 /// The delegation fields (`sig`, `msig`, `lmsig`)
-/// are not relevant here — a [`HybridTxnSignerProgram`] account is its own authority.
+/// are not relevant here — a [HybridTxnSignerProgram] account is its own authority.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct HybridTxnSignerLogicSig {
     /// The `AVM bytecode` representing the `HybridTxnSigner` program's logic.
@@ -245,20 +245,20 @@ impl HybridTxnSigner {
         &self.0
     }
 
-    /// Returns the 32-byte [`Address`] derived from the underlying AVM bytecode.
+    /// Returns the 32-byte [Address] derived from the underlying AVM bytecode.
     pub fn address(&self) -> Address {
         Address::from_bytecode(&self.0)
     }
 
     /// Bundles the underlying AVM bytecode as `l`, the Falcon compressed signature as `arg[0]`
-    /// and the Ed25519 signature as `arg[1]` into a [`HybridTxnSignerLogicSig`]
+    /// and the Ed25519 signature as `arg[1]` into a [HybridTxnSignerLogicSig]
     /// 
     /// `falcon_sig` and `ed25519_sig` are not part of the bytecode itself but
     /// represent runtime arguments passed alongside the program.
     /// They must be a valid Falcon signature in compressed format,
     /// and a valid Ed25519 signature, produced over the transaction ID as the data.
     /// 
-    /// The [`HybridTxnSignerLogicSig`] must be added into the `lsig` field of an Algorand signed 
+    /// The [HybridTxnSignerLogicSig] must be added into the `lsig` field of an Algorand signed 
     /// transaction in order to make this program the signing authority and sender.
     /// After that, anyone can attempt to submit the signed transaction to the network,
     /// which will succeed if the program evalutes to `true`

@@ -18,7 +18,7 @@ pub(crate) fn is_valid_ed25519_pubkey(bytes: &[u8; ED25519_PUBKEY_SIZE]) -> bool
 
 /// A 32-byte address acting as a valid Algorand account when funded
 ///
-/// Supports derivation via [`Address::from_bytecode`] and parsing via [`FromStr`].
+/// Supports derivation via [Address::from_bytecode] and parsing via [FromStr].
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct Address(pub(crate) [u8; ED25519_PUBKEY_SIZE]);
 
@@ -40,7 +40,7 @@ impl Address {
 impl FromStr for Address {
     type Err = Error;
 
-    /// Parses a base32-encoded Algorand address string into an [`Address`].
+    /// Parses a base32-encoded Algorand address string into an [Address].
     ///
     /// Verifies the 4-byte checksum and rejects any address that is a valid Ed25519
     /// curve point, since such an address could belong to a standard Algorand account
