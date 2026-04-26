@@ -12,8 +12,8 @@ pub enum Error {
     Ed25519Address,
 }
 
-impl std::fmt::Display for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             Self::CounterExhausted => f.write_str("counter exhausted with no off-curve address found; try a different Falcon key."),
             Self::BadAddressEncoding => f.write_str("address is not valid base32 or decodes to the wrong length."),
@@ -23,4 +23,4 @@ impl std::fmt::Display for Error {
     }
 }
 
-impl std::error::Error for Error {}
+impl core::error::Error for Error {}

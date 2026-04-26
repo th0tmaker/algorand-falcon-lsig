@@ -1,6 +1,6 @@
 // src/address.rs
 
-use std::{fmt, str::FromStr};
+use core::{fmt, str::FromStr};
 
 use curve25519_dalek::edwards::CompressedEdwardsY;
 use sha2::{Digest, Sha512_256};
