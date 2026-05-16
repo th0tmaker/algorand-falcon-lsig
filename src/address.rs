@@ -20,10 +20,10 @@ pub(crate) fn is_valid_ed25519_pubkey(bytes: &[u8; ED25519_PUBKEY_SIZE]) -> bool
 ///
 /// Supports derivation from program bytecode and parsing via [`FromStr`].
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct Address(pub(crate) [u8; ED25519_PUBKEY_SIZE]);
+pub struct Address([u8; ED25519_PUBKEY_SIZE]);
 
 impl Address {
-    /// Derives `self` from `SHA512/256("Program" || bytecode))`
+    /// Derives `self` from `SHA512/256("Program" || bytecode)`
     pub(crate) fn from_bytecode(bytecode: &[u8]) -> Self {
         let mut h = Sha512_256::new();
         h.update(b"Program");
@@ -71,15 +71,10 @@ impl fmt::Display for Address {
     /// Formats `self` as `base32(self || checksum)` into a human-readable string,
     /// e.g. `VCMJKWOY5P5POAA53TPWFF6ROMZEGVBKOR3DFR6GH6XKRMCMLE5ZWRFNN`
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        // Hash bytes of self to derive checksum
         let checksum = Sha512_256::digest(self.0);
-        
-        // Create 36-byte mutable buffer (32-byte self + 4-byte checksum)
         let mut buf = [0u8; 36];
         buf[..32].copy_from_slice(&self.0);
         buf[32..].copy_from_slice(&checksum[28..]);
-
-        // Base32 encode (no padding) into final string
         f.write_str(&base32::encode(base32::Alphabet::Rfc4648 { padding: false }, &buf))
     }
 }
@@ -88,7 +83,6 @@ impl fmt::Display for Address {
 mod tests {
     use super::*;
     use curve25519_dalek::constants::ED25519_BASEPOINT_COMPRESSED;
-    use crate::constants::ED25519_PUBKEY_SIZE;
 
     fn encode_address(bytes: &[u8; ED25519_PUBKEY_SIZE]) -> String {
         let checksum = Sha512_256::digest(bytes);

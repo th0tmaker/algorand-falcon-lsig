@@ -20,7 +20,7 @@ impl core::fmt::Display for Error {
             Self::CounterExhausted => f.write_str("counter exhausted with no off-curve address found; try a different Falcon key."),
             Self::InvalidAddressEncoding => f.write_str("address is not valid base32 or decodes to the wrong length."),
             Self::InvalidAddressChecksum => f.write_str("address checksum mismatch."),
-            Self::Ed25519CurvePoint => f.write_str("address must not be a standard Ed25519 public key that has corresponding private key."),
+            Self::Ed25519CurvePoint => f.write_str("address is a valid Ed25519 curve point and may have a corresponding private key."),
             Self::InvalidSignatureSize => f.write_str("Falcon signature is empty or exceeds the maximum compressed size of 1423 bytes."),
         }
     }

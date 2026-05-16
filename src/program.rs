@@ -6,9 +6,10 @@ use crate::{
     error::Error
 };
 
-/// Iterates counter values 0–255 at `p[4]` until the derived address is not a valid
+/// Sets `p[4]` to the first counter value (0–255) whose derived address is not a valid
 /// Ed25519 curve point. Returns `Err(Error::CounterExhausted)` if all 256 attempts fail.
-fn find_off_curve_address(p: &mut [u8]) -> Result<(), Error> {
+fn set_off_curve_counter(p: &mut [u8]) -> Result<(), Error> {
+    debug_assert!(p.len() >= 5, "bytecode buffer must be at least 5 bytes to hold the counter at p[4]");
     for counter in 0..=u8::MAX {
         p[4] = counter;
         if !is_valid_ed25519_pubkey(Address::from_bytecode(p).as_bytes()) {
@@ -79,7 +80,6 @@ impl FalconTxnSigner {
     /// address is **not** a valid Ed25519 curve point.
     /// Returns `Err(Error::CounterExhausted)` if all 256 attempts fail.
     pub fn compile(pubkey: &[u8; FALCON_PUBKEY_SIZE]) -> Result<Self, Error> {
-        // Create 1805-byte mutable buffer and assemble the program
         let mut p = [0u8; FALCON_BYTECODE_SIZE];
         p[0] = 0x0c;
         p[1..5].copy_from_slice(&[0x26, 0x01, 0x01, 0x00]);
@@ -89,7 +89,7 @@ impl FalconTxnSigner {
         p[11..1804].copy_from_slice(pubkey);
         p[1804] = 0x85;
 
-        find_off_curve_address(&mut p)?;
+        set_off_curve_counter(&mut p)?;
         Ok(Self(p))
     }
 
@@ -99,6 +99,10 @@ impl FalconTxnSigner {
     }
 
     /// Returns the 32-byte [`Address`] derived from the underlying AVM bytecode.
+    ///
+    /// The off-curve invariant is established once by [`FalconTxnSigner::compile`] and is not
+    /// re-checked here. It holds for any instance reachable outside this crate, since the
+    /// inner field is private and `compile` is the only external constructor.
     pub fn address(&self) -> Address {
         Address::from_bytecode(&self.0)
     }
@@ -208,8 +212,7 @@ impl HybridTxnSigner {
     /// Assembles the bytecode, then iterates counters 0–255 until the derived
     /// address is **not** a valid Ed25519 curve point.
     /// Returns `Err(Error::CounterExhausted)` if all 256 attempts fail.
-    pub fn compile(falcon_pubkey: &[u8; FALCON_PUBKEY_SIZE], ed25519_pubkey:&[u8; ED25519_PUBKEY_SIZE]) -> Result<Self, Error> {
-        // Create 1844-byte mutable buffer and assemble the program
+    pub fn compile(falcon_pubkey: &[u8; FALCON_PUBKEY_SIZE], ed25519_pubkey: &[u8; ED25519_PUBKEY_SIZE]) -> Result<Self, Error> {
         let mut p = [0u8; HYBRID_BYTECODE_SIZE];
         p[0] = 0x0c;
         p[1..5].copy_from_slice(&[0x26, 0x01, 0x01, 0x00]);
@@ -225,7 +228,7 @@ impl HybridTxnSigner {
         p[1842] = 0x84;
         p[1843] = 0x14;
 
-        find_off_curve_address(&mut p)?;
+        set_off_curve_counter(&mut p)?;
         Ok(Self(p))
     }
     
@@ -235,6 +238,10 @@ impl HybridTxnSigner {
     }
 
     /// Returns the 32-byte [`Address`] derived from the underlying AVM bytecode.
+    ///
+    /// The off-curve invariant is established once by [`HybridTxnSigner::compile`] and is not
+    /// re-checked here. It holds for any instance reachable outside this crate, since the
+    /// inner field is private and `compile` is the only external constructor.
     pub fn address(&self) -> Address {
         Address::from_bytecode(&self.0)
     }
@@ -268,7 +275,6 @@ impl HybridTxnSigner {
     }
 
 }
-
 
 #[cfg(test)]
 mod tests {
