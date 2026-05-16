@@ -18,7 +18,7 @@ pub(crate) fn is_valid_ed25519_pubkey(bytes: &[u8; ED25519_PUBKEY_SIZE]) -> bool
 
 /// A 32-byte address acting as a valid Algorand account when funded
 ///
-/// Supports derivation via [Address::from_bytecode] and parsing via [FromStr].
+/// Supports derivation from program bytecode and parsing via [`FromStr`].
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct Address(pub(crate) [u8; ED25519_PUBKEY_SIZE]);
 
@@ -40,34 +40,29 @@ impl Address {
 impl FromStr for Address {
     type Err = Error;
 
-    /// Parses a base32-encoded Algorand address string into an [Address].
+    /// Parses a base32-encoded Algorand address string into an [`Address`].
     ///
     /// Verifies the 4-byte checksum and rejects any address that is a valid Ed25519
     /// curve point, since such an address could belong to a standard Algorand account
     /// with a corresponding private key.
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        // Base-32 decoded the input string
-        let decoded = base32::decode(base32::Alphabet::Rfc4648 { padding: false }, s)
-            .filter(|b| b.len() == 36)
+        let decoded: [u8; 36] = base32::decode(base32::Alphabet::Rfc4648 { padding: false }, s)
+            .and_then(|v| v.try_into().ok())
             .ok_or(Error::BadAddressEncoding)?;
 
-        // Try converting the decoded input into a 32-byte array 
-        let bytes: [u8; 32] = decoded[..32].try_into().unwrap();
+        let mut bytes = [0u8; 32];
+        bytes.copy_from_slice(&decoded[..32]);
 
-        // Hash the decoded bytes with SHA512/256 to get the checksum
         let expected = Sha512_256::digest(bytes);
 
-        // Throw error if checksum invalid
         if decoded[32..] != expected[28..] {
             return Err(Error::BadAddressChecksum);
         }
 
-        // Throw error if bytes are a valid Ed25519 curve point
         if is_valid_ed25519_pubkey(&bytes) {
             return Err(Error::Ed25519Address);
         }
 
-        // Return the bytes decoded from the address string
         Ok(Self(bytes))
     }
 }
