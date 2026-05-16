@@ -6,6 +6,18 @@ use crate::{
     error::Error
 };
 
+/// Iterates counter values 0–255 at `p[4]` until the derived address is not a valid
+/// Ed25519 curve point. Returns `Err(Error::CounterExhausted)` if all 256 attempts fail.
+fn find_off_curve_address(p: &mut [u8]) -> Result<(), Error> {
+    for counter in 0..=u8::MAX {
+        p[4] = counter;
+        if !is_valid_ed25519_pubkey(Address::from_bytecode(p).as_bytes()) {
+            return Ok(());
+        }
+    }
+    Err(Error::CounterExhausted)
+}
+
 /// A FalconTxnSigner LogicSig.
 ///
 /// Field names map to the Algorand wire format:
@@ -77,21 +89,8 @@ impl FalconTxnSigner {
         p[11..1804].copy_from_slice(pubkey);
         p[1804] = 0x85;
 
-        // Loop through u8 range
-        for counter in 0..=255 {
-            // Add counter value to program at index 4
-            p[4] = counter;
-            
-            // Derive the program address from bytecode
-            let addr = Address::from_bytecode(&p);
-
-            // Return Ok if address bytes are not a valid ed25519 curve point
-            if !is_valid_ed25519_pubkey(addr.as_bytes()) {
-                return Ok(Self(p));
-            }
-        }
-        // Throw error if no safe address
-        Err(Error::CounterExhausted)
+        find_off_curve_address(&mut p)?;
+        Ok(Self(p))
     }
 
     /// Returns the underlying AVM bytecode.
@@ -226,21 +225,8 @@ impl HybridTxnSigner {
         p[1842] = 0x84;
         p[1843] = 0x14;
 
-        // Loop through u8 range
-        for counter in 0..=255 {
-            // Add counter value to program at index 4
-            p[4] = counter;
-            
-            // Derive the program address from bytecode
-            let addr = Address::from_bytecode(&p);
-
-            // Return Ok if address bytes are not a valid ed25519 curve point
-            if !is_valid_ed25519_pubkey(addr.as_bytes()) {
-                return Ok(Self(p));
-            }
-        }
-        // Throw error if no safe address
-        Err(Error::CounterExhausted)
+        find_off_curve_address(&mut p)?;
+        Ok(Self(p))
     }
     
     /// Returns the underlying AVM bytecode.
