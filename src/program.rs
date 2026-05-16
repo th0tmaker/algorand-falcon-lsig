@@ -348,7 +348,33 @@ mod tests {
         assert_eq!(lsig.falcon_sig(), fake_sig.as_slice());
     }
 
-    // --- HybridTxnSignerProgram tests ---
+    #[test]
+    fn compile_succeeds() {
+        assert!(FalconTxnSigner::compile(ZERO_PUBKEY).is_ok());
+    }
+
+    #[test]
+    fn compile_address_is_off_curve() {
+        let signer = FalconTxnSigner::compile(ZERO_PUBKEY).unwrap();
+        assert!(!is_valid_ed25519_pubkey(signer.address().as_bytes()));
+    }
+
+    #[test]
+    fn compile_is_deterministic() {
+        let a = FalconTxnSigner::compile(ZERO_PUBKEY).unwrap();
+        let b = FalconTxnSigner::compile(ZERO_PUBKEY).unwrap();
+        assert_eq!(a, b);
+    }
+
+    #[test]
+    fn compile_different_pubkeys_give_different_programs() {
+        let mut other_pubkey = [0u8; FALCON_PUBKEY_SIZE];
+        other_pubkey[0] = 0x01;
+        let a = FalconTxnSigner::compile(ZERO_PUBKEY).unwrap();
+        let b = FalconTxnSigner::compile(&other_pubkey).unwrap();
+        assert_ne!(a, b);
+        assert_ne!(a.address(), b.address());
+    }
 
     const ZERO_ED25519_PUBKEY: &[u8; ED25519_PUBKEY_SIZE] = &[0u8; ED25519_PUBKEY_SIZE];
 
@@ -423,5 +449,33 @@ mod tests {
         assert_eq!(lsig.l(), program.as_bytes());
         assert_eq!(lsig.falcon_sig(), fake_falcon_sig.as_slice());
         assert_eq!(lsig.ed25519_sig(), &fake_ed25519_sig);
+    }
+
+    #[test]
+    fn hybrid_compile_succeeds() {
+        assert!(HybridTxnSigner::compile(ZERO_PUBKEY, ZERO_ED25519_PUBKEY).is_ok());
+    }
+
+    #[test]
+    fn hybrid_compile_address_is_off_curve() {
+        let signer = HybridTxnSigner::compile(ZERO_PUBKEY, ZERO_ED25519_PUBKEY).unwrap();
+        assert!(!is_valid_ed25519_pubkey(signer.address().as_bytes()));
+    }
+
+    #[test]
+    fn hybrid_compile_is_deterministic() {
+        let a = HybridTxnSigner::compile(ZERO_PUBKEY, ZERO_ED25519_PUBKEY).unwrap();
+        let b = HybridTxnSigner::compile(ZERO_PUBKEY, ZERO_ED25519_PUBKEY).unwrap();
+        assert_eq!(a, b);
+    }
+
+    #[test]
+    fn hybrid_compile_different_pubkeys_give_different_programs() {
+        let mut other_falcon = [0u8; FALCON_PUBKEY_SIZE];
+        other_falcon[0] = 0x01;
+        let a = HybridTxnSigner::compile(ZERO_PUBKEY, ZERO_ED25519_PUBKEY).unwrap();
+        let b = HybridTxnSigner::compile(&other_falcon, ZERO_ED25519_PUBKEY).unwrap();
+        assert_ne!(a, b);
+        assert_ne!(a.address(), b.address());
     }
 }
