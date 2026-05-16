@@ -2,7 +2,7 @@
 
 use crate::{
     address::{Address, is_valid_ed25519_pubkey}, 
-    constants::{ED25519_PUBKEY_SIZE, ED25519_SIG_SIZE, FALCON_BYTECODE_SIZE, FALCON_PUBKEY_SIZE, HYBRID_BYTECODE_SIZE},
+    constants::{ED25519_PUBKEY_SIZE, ED25519_SIG_SIZE, FALCON_BYTECODE_SIZE, FALCON_PUBKEY_SIZE, FALCON_SIG_MAX_SIZE, HYBRID_BYTECODE_SIZE},
     error::Error
 };
 
@@ -118,11 +118,14 @@ impl FalconTxnSigner {
     /// and sender. After that, anyone can attempt to submit the signed transaction
     /// to the network, which will succeed if the program evalutes to `true`
     /// (finishes with a single non-zero `u64` value on the stack).
-    pub fn to_lsig(&self, sig: &[u8]) -> FalconTxnSignerLogicSig {
-        FalconTxnSignerLogicSig {
+    pub fn to_lsig(&self, sig: &[u8]) -> Result<FalconTxnSignerLogicSig, Error> {
+        if sig.is_empty() || sig.len() > FALCON_SIG_MAX_SIZE {
+            return Err(Error::InvalidSignatureSize);
+        }
+        Ok(FalconTxnSignerLogicSig {
             l: self.0,
             falcon_sig: sig.into(),
-        }
+        })
     }
 }
 
@@ -267,12 +270,15 @@ impl HybridTxnSigner {
         &self,
         falcon_sig: &[u8],
         ed25519_sig: &[u8; ED25519_SIG_SIZE]
-    ) -> HybridTxnSignerLogicSig {
-        HybridTxnSignerLogicSig {
+    ) -> Result<HybridTxnSignerLogicSig, Error> {
+        if falcon_sig.is_empty() || falcon_sig.len() > FALCON_SIG_MAX_SIZE {
+            return Err(Error::InvalidSignatureSize);
+        }
+        Ok(HybridTxnSignerLogicSig {
             l: self.0,
             falcon_sig: falcon_sig.into(),
             ed25519_sig: *ed25519_sig
-        }
+        })
     }
 
 }
@@ -343,9 +349,22 @@ mod tests {
     fn to_lsig_attaches_sig() {
         let program = FalconTxnSigner(build_bytecode(ZERO_PUBKEY, 0));
         let fake_sig = vec![0xAB, 0xCD, 0xEF];
-        let lsig = program.to_lsig(&fake_sig);
+        let lsig = program.to_lsig(&fake_sig).unwrap();
         assert_eq!(lsig.l(), program.as_bytes());
         assert_eq!(lsig.falcon_sig(), fake_sig.as_slice());
+    }
+
+    #[test]
+    fn to_lsig_rejects_empty_sig() {
+        let program = FalconTxnSigner(build_bytecode(ZERO_PUBKEY, 0));
+        assert!(matches!(program.to_lsig(&[]), Err(Error::InvalidSignatureSize)));
+    }
+
+    #[test]
+    fn to_lsig_rejects_oversized_sig() {
+        let program = FalconTxnSigner(build_bytecode(ZERO_PUBKEY, 0));
+        let oversized = vec![0u8; FALCON_SIG_MAX_SIZE + 1];
+        assert!(matches!(program.to_lsig(&oversized), Err(Error::InvalidSignatureSize)));
     }
 
     #[test]
@@ -445,10 +464,25 @@ mod tests {
         let program = HybridTxnSigner(build_hybrid_bytecode(ZERO_PUBKEY, ZERO_ED25519_PUBKEY, 0));
         let fake_falcon_sig = vec![0xAB, 0xCD, 0xEF];
         let fake_ed25519_sig = [0x42u8; ED25519_SIG_SIZE];
-        let lsig = program.to_lsig(&fake_falcon_sig, &fake_ed25519_sig);
+        let lsig = program.to_lsig(&fake_falcon_sig, &fake_ed25519_sig).unwrap();
         assert_eq!(lsig.l(), program.as_bytes());
         assert_eq!(lsig.falcon_sig(), fake_falcon_sig.as_slice());
         assert_eq!(lsig.ed25519_sig(), &fake_ed25519_sig);
+    }
+
+    #[test]
+    fn hybrid_to_lsig_rejects_empty_sig() {
+        let program = HybridTxnSigner(build_hybrid_bytecode(ZERO_PUBKEY, ZERO_ED25519_PUBKEY, 0));
+        let ed25519_sig = [0u8; ED25519_SIG_SIZE];
+        assert!(matches!(program.to_lsig(&[], &ed25519_sig), Err(Error::InvalidSignatureSize)));
+    }
+
+    #[test]
+    fn hybrid_to_lsig_rejects_oversized_sig() {
+        let program = HybridTxnSigner(build_hybrid_bytecode(ZERO_PUBKEY, ZERO_ED25519_PUBKEY, 0));
+        let oversized = vec![0u8; FALCON_SIG_MAX_SIZE + 1];
+        let ed25519_sig = [0u8; ED25519_SIG_SIZE];
+        assert!(matches!(program.to_lsig(&oversized, &ed25519_sig), Err(Error::InvalidSignatureSize)));
     }
 
     #[test]

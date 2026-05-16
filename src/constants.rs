@@ -14,3 +14,6 @@ pub const FALCON_BYTECODE_SIZE: usize = 1805;
 
 /// Size of the `HybridTxnSigner` AVM bytecode in bytes.
 pub const HYBRID_BYTECODE_SIZE: usize = 1844;
+
+/// Maximum size of a Falcon-1024 compressed signature in bytes.
+pub const FALCON_SIG_MAX_SIZE: usize = 1423;

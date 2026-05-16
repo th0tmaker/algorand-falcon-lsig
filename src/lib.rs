@@ -9,7 +9,7 @@ pub use {
     address::Address,
     constants::{
         ED25519_PUBKEY_SIZE, ED25519_SIG_SIZE, FALCON_BYTECODE_SIZE,
-        FALCON_PUBKEY_SIZE, HYBRID_BYTECODE_SIZE
+        FALCON_PUBKEY_SIZE, FALCON_SIG_MAX_SIZE, HYBRID_BYTECODE_SIZE
     },
     error::Error,
     program::{

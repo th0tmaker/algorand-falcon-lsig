@@ -48,7 +48,7 @@ impl FromStr for Address {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let decoded: [u8; 36] = base32::decode(base32::Alphabet::Rfc4648 { padding: false }, s)
             .and_then(|v| v.try_into().ok())
-            .ok_or(Error::BadAddressEncoding)?;
+            .ok_or(Error::InvalidAddressEncoding)?;
 
         let mut bytes = [0u8; 32];
         bytes.copy_from_slice(&decoded[..32]);
@@ -56,11 +56,11 @@ impl FromStr for Address {
         let expected = Sha512_256::digest(bytes);
 
         if decoded[32..] != expected[28..] {
-            return Err(Error::BadAddressChecksum);
+            return Err(Error::InvalidAddressChecksum);
         }
 
         if is_valid_ed25519_pubkey(&bytes) {
-            return Err(Error::Ed25519Address);
+            return Err(Error::Ed25519CurvePoint);
         }
 
         Ok(Self(bytes))
@@ -107,26 +107,26 @@ mod tests {
 
     #[test]
     fn bad_encoding() {
-        assert!(matches!("invalid base32".parse::<Address>(), Err(Error::BadAddressEncoding)));
+        assert!(matches!("invalid base32".parse::<Address>(), Err(Error::InvalidAddressEncoding)));
     }
 
     #[test]
     fn wrong_length() {
         let short = base32::encode(base32::Alphabet::Rfc4648 { padding: false }, &[0u8; 10]);
-        assert!(matches!(short.parse::<Address>(), Err(Error::BadAddressEncoding)));
+        assert!(matches!(short.parse::<Address>(), Err(Error::InvalidAddressEncoding)));
     }
 
     #[test]
     fn bad_checksum() {
         // 36 zero bytes encodes fine but the checksum won't match
         let s = base32::encode(base32::Alphabet::Rfc4648 { padding: false }, &[0u8; 36]);
-        assert!(matches!(s.parse::<Address>(), Err(Error::BadAddressChecksum)));
+        assert!(matches!(s.parse::<Address>(), Err(Error::InvalidAddressChecksum)));
     }
 
     #[test]
     fn ed25519_address_rejected() {
         let bytes = ED25519_BASEPOINT_COMPRESSED.to_bytes();
         let s = encode_address(&bytes);
-        assert!(matches!(s.parse::<Address>(), Err(Error::Ed25519Address)));
+        assert!(matches!(s.parse::<Address>(), Err(Error::Ed25519CurvePoint)));
     }
 }
